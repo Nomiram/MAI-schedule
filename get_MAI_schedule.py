@@ -2,7 +2,28 @@
 fork https://gitlab.mai.ru/FMRodin/mai-schedule-ical/-/tree/master
 Расписание с сайта МАИ в различных форматах
 Исправлено в соответствии с изменениями в выдаче json на сайте public.mai.ru
-Добавлен экспорт в TXT (CSV)
+Добавлен экспорт в CSV
+'''
+'''
+Формат json public.mai.ru:
+'<dd.mm.yyyy>':{ 
+    'day': '<day of the week>', 
+        'pairs':{
+            '<hh:mm:ss>':{ 
+            '<name of pair>':{ 
+                'time_start': '<hh:mm:ss>', 
+                'time_end'  : '<hh:mm:ss>', 
+                'lector': {'<id>': '<name>'}, 
+                'type': {'<type>': 1}, 
+                'room': {'<id>': '<room name>'}, 
+                'lms': '<url?>', 
+                'teams': '<url?>', 
+                'other': '<url?>'
+            }
+            }
+        },
+        {...}
+}
 '''
 import urllib.request
 import json
@@ -11,45 +32,41 @@ import icalendar
 from datetime import datetime
 from dateutil import parser
 DELIM = "; "
-def getscedule(group_list, console = True, ics = False, txt = False):
+def getscedule(group_list):
     '''
-    Функция выводит расписание с сайта МАИ в различных форматах:
-    TXT, ICS для добавления в календарь
+    Получение расписания по группам с сайта public.mai.ru
     '''
+    scedule_list = {} 
+    #[{'group_name': [dict, dict,...]},...]
+    # dict
     for group_list_el in group_list:
         group_name = group_list_el
-        if txt:
-            f = open(group_name + ".txt", "wt")
         group_hash = hashlib.md5(group_name.encode('utf-8')).hexdigest()
-    
+        
+        scedule_list[group_name] = []
+        
         link = "https://public.mai.ru/schedule/data/" + group_hash + ".json"
-        print(link)
+        # print(link)
         rasp = urllib.request.urlopen(link).read()
         rasp = json.loads(rasp)
+        # print(rasp)
         cal = icalendar.Calendar()
         cal.add('prodid', '-//My calendar product//mxm.dk//')
         cal.add('version', '2.0')
     
         rasp.pop("group")
-        # print(rasp)
-    
         for day in rasp.items():
             date = datetime.fromisoformat(str(parser.parse(day[0], dayfirst=True)))
-            if console:
-                print("Дата:", date.date())
-            if txt:
-                f.write("Дата: "+str(date.date())+"\n")
+            
             pary = day[1]["pairs"]
-            # print("PARY::", pary)
             for _para in pary.items():
                 paraoff = _para[1]
                 para = paraoff[list(paraoff)[0]]
-                # print("para:", para )
                 time_start = datetime.fromisoformat(str(parser.parse(para["time_start"])))
                 time_start = datetime.combine(date.date(), time_start.time())
                 time_end = datetime.fromisoformat(str(parser.parse(para["time_end"])))
                 time_end = datetime.combine(date.date(), time_end.time())
-    
+                
                 name = []
                 for _name in paraoff.items():
                     name.append(_name[0])
@@ -69,28 +86,57 @@ def getscedule(group_list, console = True, ics = False, txt = False):
                     room.append(_room[1])
                 room = ', '.join(room)
                 
+                scedule_list[group_name].append({'date': date.strftime('%Y-%m-%d'),'time_start': para["time_start"],
+                'time_end': para["time_end"],'name': name,'type': type_,
+                'lector': lector,'room': room})
+                
+
+                
+    return scedule_list
+    # print(scedule_list)
+    # print("done with", group_name)
+def export_scedule(schedule, console = True, ics = False, csv = False):
+    '''
+    Функция экспортирует расписание с сайта МАИ в различных форматах:
+    CSV, ICS для добавления в календарь
+    '''
+    for group_name in schedule:
+        if csv: f_txt = open(group_name + ".csv", "wt")
+        if ics:
+            cal = icalendar.Calendar()
+            cal.add('prodid', '-//My calendar product//mxm.dk//')
+            cal.add('version', '2.0')
+        pairs = schedule[group_name]
+        pairdate = 0;
+        for pair in pairs:
+            if csv or console:
+                if pair['date'] != pairdate:
+                    pairdate = pair['date']
+                    if console: print("Дата: "+pairdate)
+                    # if csv: f_txt.write("Дата: "+pairdate+"\n")
+                if csv: f_txt.write(DELIM.join([pair[i] for i in list(pair)])+"\n")
+                if console: print(" ".join([pair[i] for i in list(pair)]))
+            if ics:
+                f = open(group_name + ".ics", "wb")
+                date = datetime.fromisoformat(str(parser.parse(pair['date'], dayfirst=True)))
+                time_start = datetime.fromisoformat(str(parser.parse(pair["time_start"])))
+                time_start = datetime.combine(date.date(), time_start.time())
+                time_end = datetime.fromisoformat(str(parser.parse(pair["time_end"])))
+                time_end = datetime.combine(date.date(), time_end.time())
+                
                 event = icalendar.Event()
-                event.add('summary', str(type_ + " " + name))
+                event.add('summary', str(pair['type'] + " " + pair['name']))
                 event.add('dtstart', time_start)
                 event.add('dtend', time_end)
                 event.add('dtstamp', time_start)
-                event.add('location', room)
-                event.add('description', lector)
+                event.add('location', pair["room"])
+                event.add('description', pair['lector'])
                 cal.add_component(event)
-                if console:
-                    print(time_start, time_end, name, type_, lector, room)
-                if txt:
                 
-                    f.write(str(time_start)+DELIM+str(time_end)+DELIM\
-                    +name+DELIM+type_+DELIM+lector+DELIM+room+"\n")
-    if txt:
-        f.close()
-    if ics:
-        f = open(group_name + ".ics", "wb")
-        f.write(cal.to_ical())
-        f.close()
-    
-    print("done with", group_name)
+        if csv: f_txt.close()
+        if ics:
+            f.write(cal.to_ical())
+            f.close()
 
 def main():
     '''
@@ -99,7 +145,8 @@ def main():
     group_list = [
         'М3О-117М-22',
     ]
-    getscedule(group_list, ics = True, txt = True)
+    schedule = getscedule(group_list)
+    export_scedule(schedule, ics = True, csv = True)
     # getscedule(group_list)
     # help(getscedule)
 
