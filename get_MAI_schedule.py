@@ -4,6 +4,7 @@ fork https://gitlab.mai.ru/FMRodin/mai-schedule-ical/-/tree/master
 Исправлено в соответствии с изменениями в выдаче json на сайте public.mai.ru
 Добавлен экспорт в CSV
 '''
+#
 '''
 Формат json public.mai.ru:
 '<dd.mm.yyyy>':{ 
@@ -25,12 +26,14 @@ fork https://gitlab.mai.ru/FMRodin/mai-schedule-ical/-/tree/master
         {...}
 }
 '''
-import urllib.request
-import json
 import hashlib
-import icalendar
+import json
+import urllib.request
 from datetime import datetime
+
+import icalendar
 from dateutil import parser
+
 DELIM = "; "
 def getscedule(group_list):
     '''
@@ -107,7 +110,11 @@ def export_scedule(schedule, console = True, ics = False, csv = False):
             cal.add('prodid', '-//My calendar product//mxm.dk//')
             cal.add('version', '2.0')
         pairs = schedule[group_name]
-        pairdate = 0;
+        pairdate = 0
+        
+        f1 = open(group_name + ".ics", "wb")
+        # f = open(group_name + "1.ics", "w")
+        # f.write('BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//My calendar product//mxm.dk//'+'\n')
         for pair in pairs:
             if csv or console:
                 if pair['date'] != pairdate:
@@ -117,13 +124,14 @@ def export_scedule(schedule, console = True, ics = False, csv = False):
                 if csv: f_txt.write(DELIM.join([pair[i] for i in list(pair)])+"\n")
                 if console: print(" ".join([pair[i] for i in list(pair)]))
             if ics:
-                f = open(group_name + ".ics", "wb")
-                date = datetime.fromisoformat(str(parser.parse(pair['date'], dayfirst=True)))
+                
+                # f.write('BEGIN:VEVENT'+'\n')
+                date = datetime.fromisoformat(str(parser.parse(pair['date'])))
                 time_start = datetime.fromisoformat(str(parser.parse(pair["time_start"])))
                 time_start = datetime.combine(date.date(), time_start.time())
                 time_end = datetime.fromisoformat(str(parser.parse(pair["time_end"])))
                 time_end = datetime.combine(date.date(), time_end.time())
-                
+
                 event = icalendar.Event()
                 event.add('summary', str(pair['type'] + " " + pair['name']))
                 event.add('dtstart', time_start)
@@ -132,11 +140,21 @@ def export_scedule(schedule, console = True, ics = False, csv = False):
                 event.add('location', pair["room"])
                 event.add('description', pair['lector'])
                 cal.add_component(event)
+                # f.write('SUMMARY:'+str(pair['type'] + " " + pair['name'])+'\n')
+                # f.write('DTSTART;VALUE=DATE-TIME:'+time_start.strftime("%Y%m%dT%H%M%S")+'\n')
+                # f.write('DTEND;VALUE=DATE-TIME:'+time_end.strftime("%Y%m%dT%H%M%S")+'\n')
+                # f.write('DTSTAMP;VALUE=DATE-TIME:'+time_end.strftime("%Y%m%dT%H%M%S")+'Z'+'\n')
+                # f.write('LOCATION:'+pair["room"]+'\n')
+                # f.write('DESCRIPTION:'+pair['lector']+'\n')
+                # f.write('END:VEVENT\n')
                 
+
         if csv: f_txt.close()
         if ics:
-            f.write(cal.to_ical())
-            f.close()
+            # f.write('END:VCALENDAR\n')
+            # f.close()
+            f1.write(cal.to_ical())
+            f1.close()
 
 def main():
     '''
@@ -148,6 +166,7 @@ def main():
     schedule = getscedule(group_list)
     export_scedule(schedule, ics = True, csv = True)
     # getscedule(group_list)
+    
     # help(getscedule)
 
 if __name__ == "__main__":
